@@ -13,7 +13,7 @@ from . import texts
 from .calculator import calculate, load_catalog
 from .editing import DIMENSIONS, InputError, parse_corners, parse_number, parse_openings, set_dimension
 from .models import ROOF_NAMES, House
-from .vision import AnalysisError, analyze_photos
+from .vision import AnalysisError, analyze_photos, provider
 
 MAX_PHOTOS = 5
 
@@ -38,6 +38,7 @@ class Session:
     confirmed: set[str] = field(default_factory=set)
     awaiting: str | None = None
     analyzing: bool = False
+    last_group: str | None = None
 
 
 sessions: dict[int, Session] = {}
@@ -103,6 +104,16 @@ async def cmd_start(message: Message) -> None:
 
 @dp.message(Command("manual"))
 async def cmd_manual(message: Message) -> None:
+    await start_manual(message, message.from_user.id)
+
+
+@dp.callback_query(F.data == "manual")
+async def on_manual(call: CallbackQuery) -> None:
+    await call.answer()
+    await start_manual(call.message, call.from_user.id)
+
+
+async def start_manual(message: Message, user_id: int) -> None:
     session = Session(
         house=House(
             length_m=10,
@@ -118,12 +129,27 @@ async def cmd_manual(message: Message) -> None:
         confirmed=set(DIMENSIONS),
         comment="Шаблон: поправьте размеры, окна и двери кнопками ниже.",
     )
-    sessions[message.from_user.id] = session
+    sessions[user_id] = session
     await send_card(message, session)
 
 
 @dp.message(F.photo)
 async def on_photo(message: Message) -> None:
+    if provider() is None:
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="📏 Ввести размеры", callback_data="manual")]]
+        )
+        session = get_session(message.from_user.id)
+        # На альбом отвечаем один раз.
+        if message.media_group_id and message.media_group_id == session.last_group:
+            return
+        session.last_group = message.media_group_id
+        await message.answer(
+            "Распознавание фото пока не подключено (нет ключа нейросети). "
+            "Введите размеры дома вручную — расчёт работает и без фото.",
+            reply_markup=keyboard,
+        )
+        return
     session = get_session(message.from_user.id)
     if len(session.photo_ids) >= MAX_PHOTOS:
         if not message.media_group_id:

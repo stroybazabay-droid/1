@@ -1,11 +1,9 @@
+"""Анализ фото нейросетью: Claude (платно) или Gemini (есть бесплатный лимит)."""
+
 import base64
 import os
 
-import anthropic
-
 from .models import FacadeAnalysis
-
-MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5")
 
 SYSTEM_PROMPT = """Ты помогаешь рассчитать виниловый сайдинг для обшивки частного дома по фотографиям.
 
@@ -25,10 +23,42 @@ class AnalysisError(Exception):
     pass
 
 
-client = anthropic.AsyncAnthropic()
+def provider() -> str | None:
+    """Какая нейросеть подключена: по ключу в настройках."""
+    if os.getenv("ANTHROPIC_API_KEY"):
+        return "claude"
+    if os.getenv("GEMINI_API_KEY"):
+        return "gemini"
+    return None
+
+
+def _user_text(hint: str | None) -> str:
+    text = "Оцени геометрию дома на этих фото для расчёта сайдинга."
+    if hint:
+        text += f"\nИзвестно от заказчика: {hint}"
+    return text
 
 
 async def analyze_photos(photos: list[bytes], hint: str | None = None) -> FacadeAnalysis:
+    match provider():
+        case "claude":
+            return await _analyze_claude(photos, hint)
+        case "gemini":
+            return await _analyze_gemini(photos, hint)
+        case _:
+            raise AnalysisError("Распознавание фото не подключено.")
+
+
+_claude = None
+
+
+async def _analyze_claude(photos: list[bytes], hint: str | None) -> FacadeAnalysis:
+    import anthropic
+
+    global _claude
+    if _claude is None:
+        _claude = anthropic.AsyncAnthropic()
+
     content: list[dict] = [
         {
             "type": "image",
@@ -40,14 +70,11 @@ async def analyze_photos(photos: list[bytes], hint: str | None = None) -> Facade
         }
         for photo in photos
     ]
-    text = "Оцени геометрию дома на этих фото для расчёта сайдинга."
-    if hint:
-        text += f"\nИзвестно от заказчика: {hint}"
-    content.append({"type": "text", "text": text})
+    content.append({"type": "text", "text": _user_text(hint)})
 
     try:
-        response = await client.beta.messages.parse(
-            model=MODEL,
+        response = await _claude.beta.messages.parse(
+            model=os.getenv("CLAUDE_MODEL", "claude-opus-5"),
             max_tokens=16000,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": content}],
@@ -67,3 +94,38 @@ async def analyze_photos(photos: list[bytes], hint: str | None = None) -> Facade
     if response.stop_reason == "max_tokens" or response.parsed_output is None:
         raise AnalysisError("Не получилось разобрать ответ модели, попробуйте ещё раз.")
     return response.parsed_output
+
+
+_gemini = None
+
+
+async def _analyze_gemini(photos: list[bytes], hint: str | None) -> FacadeAnalysis:
+    from google import genai
+    from google.genai import errors, types
+
+    global _gemini
+    if _gemini is None:
+        _gemini = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+    contents = [types.Part.from_bytes(data=photo, mime_type="image/jpeg") for photo in photos]
+    contents.append(_user_text(hint))
+    try:
+        response = await _gemini.aio.models.generate_content(
+            model=os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+                response_schema=FacadeAnalysis,
+            ),
+        )
+    except errors.ClientError as e:
+        if e.code == 429:
+            raise AnalysisError("Бесплатный лимит Gemini на сейчас исчерпан, попробуйте позже.") from e
+        raise AnalysisError(f"Ошибка сервиса анализа ({e.code}).") from e
+    except errors.APIError as e:
+        raise AnalysisError("Сервис анализа временно недоступен, попробуйте позже.") from e
+
+    if not isinstance(response.parsed, FacadeAnalysis):
+        raise AnalysisError("Не получилось разобрать ответ модели, попробуйте ещё раз.")
+    return response.parsed
