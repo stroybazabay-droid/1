@@ -1,0 +1,4 @@
+aiogram>=3.31,<4
+anthropic>=1.8,<2
+pydantic>=2.13,<3
+python-dotenv>=1.0

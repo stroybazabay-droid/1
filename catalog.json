@@ -1,0 +1,59 @@
+{
+  "_note": "Прайс и размеры комплектующих. Проверьте длины и рабочую ширину по паспорту U-Plast и поставьте свои цены (руб. за штуку).",
+  "currency": "₽",
+  "waste_percent": 10,
+  "profile_reserve_percent": 5,
+  "fasteners_per_m2": 15,
+  "fasteners_per_profile": 10,
+  "items": {
+    "panel": {
+      "name": "Панель сайдинга виниловая U-Plast",
+      "length_m": 3.66,
+      "working_width_m": 0.23,
+      "unit": "шт",
+      "price": 450
+    },
+    "starter": {
+      "name": "Стартовая планка",
+      "length_m": 3.66,
+      "unit": "шт",
+      "price": 150
+    },
+    "outside_corner": {
+      "name": "Наружный угол",
+      "length_m": 3.05,
+      "unit": "шт",
+      "price": 520
+    },
+    "inside_corner": {
+      "name": "Внутренний угол",
+      "length_m": 3.05,
+      "unit": "шт",
+      "price": 380
+    },
+    "window_trim": {
+      "name": "Околооконная планка",
+      "length_m": 3.05,
+      "unit": "шт",
+      "price": 690
+    },
+    "finish": {
+      "name": "Финишная планка",
+      "length_m": 3.66,
+      "unit": "шт",
+      "price": 160
+    },
+    "j_channel": {
+      "name": "J-профиль",
+      "length_m": 3.05,
+      "unit": "шт",
+      "price": 210
+    },
+    "fasteners": {
+      "name": "Саморезы оцинкованные с прессшайбой",
+      "pack_size": 250,
+      "unit": "уп",
+      "price": 350
+    }
+  }
+}
